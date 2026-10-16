@@ -1,0 +1,739 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  PRINCIPAL
+  TEACHER
+  ACCOUNTANT
+  RECEPTIONIST
+  PARENT
+  STUDENT
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  TRANSFERRED
+  GRADUATED
+}
+
+enum StaffStatus {
+  ACTIVE
+  ON_LEAVE
+  RESIGNED
+  TERMINATED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+}
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
+enum TargetAudience {
+  ALL
+  TEACHERS
+  PARENTS
+  STUDENTS
+  CLASS
+}
+
+enum PriorityLevel {
+  NORMAL
+  URGENT
+  EVENT
+}
+
+model SchoolSetting {
+  id                  Int      @id @default(autoincrement())
+  schoolName          String   @default("Kiva School")
+  campusName          String   @default("Main Campus, Karachi")
+  registrationNumber  String   @default("REG-PK-2024-889")
+  address             String   @default("Block 4, Gulshan-e-Iqbal, Karachi, Pakistan")
+  phone               String   @default("+92 21 34981234")
+  email               String   @default("info@kivaschool.edu.pk")
+  website             String   @default("https://kivaschool.edu.pk")
+  logoUrl             String?  @default("/kiva-logo.png")
+  principalName       String   @default("Prof. Muhammad Tariq Khan")
+  currency            String   @default("PKR")
+  currencySymbol      String   @default("₨")
+  timezone            String   @default("Asia/Karachi")
+  activeAcademicYearId Int?
+  updatedAt           DateTime @updatedAt
+}
+
+model User {
+  id              Int            @id @default(autoincrement())
+  username        String         @unique
+  email           String         @unique
+  passwordHash    String
+  role            Role           @default(STUDENT)
+  isActive        Boolean        @default(true)
+  avatarUrl       String?
+  lastLoginAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  staff           Staff?
+  student         Student?
+  parent          ParentGuardian?
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+}
+
+model AcademicYear {
+  id          Int            @id @default(autoincrement())
+  name        String         @unique // e.g. "2025-2026"
+  startDate   DateTime
+  endDate     DateTime
+  isCurrent   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+
+  students    Student[]
+  feeStructures FeeStructure[]
+  feeInvoices FeeInvoice[]
+  exams       Exam[]
+  timetables  TimetableEntry[]
+}
+
+model ClassGrade {
+  id          Int            @id @default(autoincrement())
+  name        String         // e.g. "Class 1", "Grade 9 (Science)", "Matric 10th"
+  numericLevel Int           // 1 to 12
+  description String?
+
+  sections    Section[]
+  subjects    Subject[]
+  students    Student[]
+  feeStructures FeeStructure[]
+  examSchedules ExamSchedule[]
+  homeworks   Homework[]
+  timetables  TimetableEntry[]
+  announcements Announcement[]
+  attendances StudentAttendance[]
+}
+
+model Section {
+  id           Int        @id @default(autoincrement())
+  name         String     // e.g. "A", "B", "Rose"
+  classGradeId Int
+  classTeacherId Int?
+  roomNumber   String?
+  capacity     Int        @default(40)
+
+  classGrade   ClassGrade @relation(fields: [classGradeId], references: [id], onDelete: Cascade)
+  classTeacher Staff?     @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  students     Student[]
+  homeworks    Homework[]
+  timetables   TimetableEntry[]
+  attendances  StudentAttendance[]
+
+  @@unique([classGradeId, name])
+}
+
+model Subject {
+  id           Int        @id @default(autoincrement())
+  name         String     // e.g. "Mathematics", "English", "Urdu", "Pakistan Studies"
+  code         String     // e.g. "MATH-101"
+  classGradeId Int
+  type         String     @default("COMPULSORY") // COMPULSORY, ELECTIVE
+
+  classGrade   ClassGrade @relation(fields: [classGradeId], references: [id], onDelete: Cascade)
+  allocations  ClassSubjectTeacher[]
+  examSchedules ExamSchedule[]
+  homeworks    Homework[]
+  timetables   TimetableEntry[]
+
+  @@unique([classGradeId, code])
+}
+
+model Staff {
+  id               Int          @id @default(autoincrement())
+  staffId          String       @unique // e.g. "STF-2024-001"
+  userId           Int?         @unique
+  firstName        String
+  lastName         String
+  gender           String       @default("Male")
+  cnic             String?      // Pakistani CNIC format "42101-XXXXXXX-X"
+  phone            String
+  email            String       @unique
+  address          String?
+  qualification    String?      // e.g. "M.Sc. Mathematics, B.Ed."
+  designation      String       // Principal, Vice Principal, Senior Teacher, Accountant, Receptionist, Librarian
+  department       String       @default("Academic")
+  joiningDate      DateTime     @default(now())
+  basicSalary      Decimal      @default(0.0) @db.Decimal(12, 2)
+  employmentStatus StaffStatus  @default(ACTIVE)
+  photoUrl         String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  user             User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  classesHeaded    Section[]    @relation("ClassTeacher")
+  subjectTeachings ClassSubjectTeacher[]
+  attendances      StaffAttendance[]
+  leaveRequests    LeaveRequest[]
+  homeworkAssigned Homework[]
+  timetables       TimetableEntry[]
+  bookBorrows      BookBorrow[]
+}
+
+model ClassSubjectTeacher {
+  id           Int      @id @default(autoincrement())
+  classGradeId Int
+  sectionId    Int?
+  subjectId    Int
+  teacherId    Int
+
+  subject      Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher      Staff    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, teacherId, sectionId])
+}
+
+model Student {
+  id             Int           @id @default(autoincrement())
+  admissionNo    String        @unique // e.g. "ADM-2025-001"
+  rollNo         String?
+  userId         Int?          @unique
+  firstName      String
+  lastName       String
+  gender         String        @default("Male")
+  dateOfBirth    DateTime
+  bFormNo        String?       // Pakistani B-Form / CNIC
+  bloodGroup     String?       // "A+", "B+", "O+", etc.
+  religion       String?       @default("Islam")
+  address        String?
+  phone          String?
+  email          String?
+  photoUrl       String?
+  admissionDate  DateTime      @default(now())
+  academicYearId Int
+  classGradeId   Int
+  sectionId      Int?
+  previousSchool String?
+  status         StudentStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  academicYear   AcademicYear  @relation(fields: [academicYearId], references: [id])
+  classGrade     ClassGrade    @relation(fields: [classGradeId], references: [id])
+  section        Section?      @relation(fields: [sectionId], references: [id])
+  
+  parentMappings ParentStudentMapping[]
+  attendances    StudentAttendance[]
+  feeConcessions StudentFeeConcession[]
+  invoices       FeeInvoice[]
+  examResults    ExamResult[]
+  homeworkSubmissions HomeworkSubmission[]
+  leaveRequests  LeaveRequest[]
+  bookBorrows    BookBorrow[]
+  transportAllocation StudentTransport?
+}
+
+model ParentGuardian {
+  id               Int           @id @default(autoincrement())
+  userId           Int?          @unique
+  fatherName       String
+  motherName       String?
+  guardianName     String?
+  cnic             String?       // Pakistani CNIC
+  phone            String
+  emergencyContact String?
+  email            String?
+  occupation       String?
+  address          String?
+  createdAt        DateTime      @default(now())
+
+  user             User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  children         ParentStudentMapping[]
+}
+
+model ParentStudentMapping {
+  id           Int            @id @default(autoincrement())
+  parentId     Int
+  studentId    Int
+  relationship String         @default("Father") // Father, Mother, Guardian
+
+  parent       ParentGuardian @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student      Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, studentId])
+}
+
+model AdmissionInquiry {
+  id                 Int           @id @default(autoincrement())
+  inquiryNo          String        @unique // e.g. "INQ-2025-001"
+  studentName        String
+  gender             String        @default("Male")
+  dateOfBirth        DateTime?
+  applyingForClassId Int
+  parentName         String
+  phone              String
+  email              String?
+  address            String?
+  previousSchool     String?
+  status             InquiryStatus @default(NEW)
+  followUpDate       DateTime?
+  notes              String?       @db.Text
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+model StudentAttendance {
+  id           Int              @id @default(autoincrement())
+  studentId    Int
+  classGradeId Int
+  sectionId    Int
+  date         DateTime         @db.Date
+  status       AttendanceStatus @default(PRESENT)
+  remarks      String?
+  markedById   Int?
+  createdAt    DateTime         @default(now())
+
+  student      Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classGrade   ClassGrade       @relation(fields: [classGradeId], references: [id])
+  section      Section          @relation(fields: [sectionId], references: [id])
+
+  @@unique([studentId, date])
+}
+
+model StaffAttendance {
+  id        Int              @id @default(autoincrement())
+  staffId   Int
+  date      DateTime         @db.Date
+  status    AttendanceStatus @default(PRESENT)
+  timeIn    String?
+  timeOut   String?
+  remarks   String?
+  createdAt DateTime         @default(now())
+
+  staff     Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, date])
+}
+
+model LeaveRequest {
+  id             Int         @id @default(autoincrement())
+  applicantType  String      @default("STUDENT") // STUDENT, STAFF
+  studentId      Int?
+  staffId        Int?
+  leaveType      String      // Sick Leave, Casual Leave, Emergency Leave, Annual Leave
+  startDate      DateTime    @db.Date
+  endDate        DateTime    @db.Date
+  reason         String      @db.Text
+  documentUrl    String?
+  status         LeaveStatus @default(PENDING)
+  reviewedBy     String?
+  reviewRemarks  String?
+  createdAt      DateTime    @default(now())
+
+  student        Student?    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  staff          Staff?      @relation(fields: [staffId], references: [id], onDelete: Cascade)
+}
+
+model FeeCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // Tuition Fee, Admission Fee, Exam Fee, Transport Fee, Annual Fund
+  description String?
+  isRecurring Boolean  @default(true) // monthly recurring
+
+  feeStructures FeeStructure[]
+  invoiceItems  InvoiceItem[]
+  concessions   StudentFeeConcession[]
+}
+
+model FeeStructure {
+  id             Int          @id @default(autoincrement())
+  academicYearId Int
+  classGradeId   Int
+  feeCategoryId  Int
+  amount         Decimal      @db.Decimal(10, 2)
+  dueDateDay     Int          @default(10) // 10th of the month
+
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  classGrade     ClassGrade   @relation(fields: [classGradeId], references: [id], onDelete: Cascade)
+  feeCategory    FeeCategory  @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([academicYearId, classGradeId, feeCategoryId])
+}
+
+model StudentFeeConcession {
+  id            Int         @id @default(autoincrement())
+  studentId     Int
+  feeCategoryId Int
+  discountType  String      @default("PERCENTAGE") // PERCENTAGE, FIXED
+  discountValue Decimal     @db.Decimal(10, 2)
+  reason        String?     // Sibling discount, Teacher's child, Need-based scholarship
+  isApproved    Boolean     @default(true)
+
+  student       Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeCategory   FeeCategory @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
+}
+
+model FeeInvoice {
+  id             Int           @id @default(autoincrement())
+  invoiceNo      String        @unique // e.g. "INV-2025-0001"
+  studentId      Int
+  academicYearId Int
+  month          Int           // 1 to 12
+  year           Int           // 2025, 2026
+  issueDate      DateTime      @default(now())
+  dueDate        DateTime
+  subtotal       Decimal       @db.Decimal(10, 2)
+  discountTotal  Decimal       @default(0.0) @db.Decimal(10, 2)
+  fineTotal      Decimal       @default(0.0) @db.Decimal(10, 2)
+  netAmount      Decimal       @db.Decimal(10, 2)
+  paidAmount     Decimal       @default(0.0) @db.Decimal(10, 2)
+  balance        Decimal       @db.Decimal(10, 2)
+  status         InvoiceStatus @default(UNPAID)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear  @relation(fields: [academicYearId], references: [id])
+  items          InvoiceItem[]
+  payments       FeePayment[]
+
+  @@index([studentId, month, year])
+}
+
+model InvoiceItem {
+  id             Int         @id @default(autoincrement())
+  invoiceId      Int
+  feeCategoryId  Int
+  feeHeadName    String
+  amount         Decimal     @db.Decimal(10, 2)
+  discountAmount Decimal     @default(0.0) @db.Decimal(10, 2)
+
+  invoice        FeeInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  feeCategory    FeeCategory @relation(fields: [feeCategoryId], references: [id])
+}
+
+model FeePayment {
+  id             Int           @id @default(autoincrement())
+  receiptNo      String        @unique // e.g. "REC-2025-0001"
+  invoiceId      Int
+  studentId      Int
+  amountPaid     Decimal       @db.Decimal(10, 2)
+  paymentDate    DateTime      @default(now())
+  paymentMethod  PaymentMethod @default(CASH)
+  transactionRef String?       // Bank Deposit Slip # or Cheque #
+  remarks        String?
+  receivedBy     String?       // Staff name or username
+  createdAt      DateTime      @default(now())
+
+  invoice        FeeInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Exam {
+  id             Int            @id @default(autoincrement())
+  academicYearId Int
+  name           String         // e.g. "Mid Term Examination 2026", "Final Term 2026"
+  startDate      DateTime
+  endDate        DateTime
+  isPublished    Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+
+  academicYear   AcademicYear   @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  schedules      ExamSchedule[]
+  results        ExamResult[]
+}
+
+model ExamSchedule {
+  id           Int          @id @default(autoincrement())
+  examId       Int
+  classGradeId Int
+  subjectId    Int
+  examDate     DateTime     @db.Date
+  startTime    String       // e.g. "09:00 AM"
+  endTime      String       // e.g. "12:00 PM"
+  maxMarks     Decimal      @default(100.0) @db.Decimal(5, 2)
+  passingMarks Decimal      @default(40.0) @db.Decimal(5, 2)
+  roomNo       String?
+
+  exam         Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  classGrade   ClassGrade   @relation(fields: [classGradeId], references: [id], onDelete: Cascade)
+  subject      Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  results      ExamResult[]
+
+  @@unique([examId, classGradeId, subjectId])
+}
+
+model GradingScale {
+  id            Int     @id @default(autoincrement())
+  gradeName     String  // "A+", "A", "B", "C", "D", "F"
+  minPercentage Decimal @db.Decimal(5, 2)
+  maxPercentage Decimal @db.Decimal(5, 2)
+  gradePoint    Decimal @default(4.0) @db.Decimal(3, 2)
+  remarks       String? // "Outstanding", "Excellent", "Pass", "Fail"
+}
+
+model ExamResult {
+  id             Int          @id @default(autoincrement())
+  examId         Int
+  examScheduleId Int
+  studentId      Int
+  marksObtained  Decimal      @db.Decimal(5, 2)
+  isAbsent       Boolean      @default(false)
+  percentage     Decimal      @db.Decimal(5, 2)
+  grade          String       // "A+", "A", "B", etc.
+  remarks        String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  exam           Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  schedule       ExamSchedule @relation(fields: [examScheduleId], references: [id], onDelete: Cascade)
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([examScheduleId, studentId])
+}
+
+model TimetablePeriod {
+  id           Int      @id @default(autoincrement())
+  periodNumber Int      @unique
+  periodName   String   // "Assembly", "Period 1", "Break", "Period 6"
+  startTime    String   // "08:00 AM"
+  endTime      String   // "08:45 AM"
+  isBreak      Boolean  @default(false)
+
+  entries      TimetableEntry[]
+}
+
+model TimetableEntry {
+  id             Int             @id @default(autoincrement())
+  academicYearId Int
+  classGradeId   Int
+  sectionId      Int
+  dayOfWeek      DayOfWeek
+  periodId       Int
+  subjectId      Int
+  teacherId      Int
+  roomNo         String?
+
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  classGrade     ClassGrade      @relation(fields: [classGradeId], references: [id], onDelete: Cascade)
+  section        Section         @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  period         TimetablePeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  subject        Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher        Staff           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([academicYearId, sectionId, dayOfWeek, periodId])
+  @@index([teacherId, dayOfWeek, periodId])
+}
+
+model Homework {
+  id           Int          @id @default(autoincrement())
+  classGradeId Int
+  sectionId    Int
+  subjectId    Int
+  teacherId    Int
+  title        String
+  description  String       @db.Text
+  attachmentUrl String?
+  assignedDate DateTime     @default(now())
+  dueDate      DateTime
+  createdAt    DateTime     @default(now())
+
+  classGrade   ClassGrade   @relation(fields: [classGradeId], references: [id], onDelete: Cascade)
+  section      Section      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  subject      Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher      Staff        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  submissions  HomeworkSubmission[]
+}
+
+model HomeworkSubmission {
+  id          Int      @id @default(autoincrement())
+  homeworkId  Int
+  studentId   Int
+  submissionText String? @db.Text
+  fileUrl     String?
+  submittedAt DateTime @default(now())
+  status      String   @default("SUBMITTED") // SUBMITTED, CHECKED, LATE
+  marks       Decimal? @db.Decimal(5, 2)
+  feedback    String?
+
+  homework    Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([homeworkId, studentId])
+}
+
+model Book {
+  id              Int          @id @default(autoincrement())
+  accessionNo     String       @unique // "LIB-001"
+  title           String
+  author          String
+  isbn            String?
+  publisher       String?
+  category        String       @default("General")
+  totalCopies     Int          @default(1)
+  availableCopies Int          @default(1)
+  rackNumber      String?
+
+  borrows         BookBorrow[]
+}
+
+model BookBorrow {
+  id           Int       @id @default(autoincrement())
+  bookId       Int
+  borrowerType String    @default("STUDENT") // STUDENT, STAFF
+  studentId    Int?
+  staffId      Int?
+  issueDate    DateTime  @default(now())
+  dueDate      DateTime
+  returnDate   DateTime?
+  fineAmount   Decimal   @default(0.0) @db.Decimal(8, 2)
+  isReturned   Boolean   @default(false)
+
+  book         Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  student      Student?  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  staff        Staff?    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+}
+
+model TransportVehicle {
+  id            Int     @id @default(autoincrement())
+  vehicleNumber String  @unique // e.g. "KHI-AB-1234"
+  vehicleModel  String  // e.g. "Toyota Coaster 2020"
+  capacity      Int     @default(30)
+  driverName    String
+  driverPhone   String
+  driverLicense String?
+
+  routes        TransportRoute[]
+}
+
+model TransportRoute {
+  id          Int               @id @default(autoincrement())
+  routeName   String            // e.g. "Route 1: Gulshan to Campus"
+  startPoint  String
+  endPoint    String
+  vehicleId   Int
+  monthlyFee  Decimal           @default(3500.0) @db.Decimal(8, 2)
+
+  vehicle     TransportVehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  students    StudentTransport[]
+}
+
+model StudentTransport {
+  id          Int            @id @default(autoincrement())
+  studentId   Int            @unique
+  routeId     Int
+  pickupPoint String
+  status      String         @default("ACTIVE")
+
+  student     Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  route       TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+}
+
+model InventoryItem {
+  id               Int             @id @default(autoincrement())
+  itemCode         String          @unique // "INV-STN-001"
+  itemName         String
+  category         String          // Stationery, Laboratory, Sports, Electronics, Uniform
+  quantityInStock  Int             @default(0)
+  minAlertQuantity Int             @default(10)
+  unitPrice        Decimal         @default(0.0) @db.Decimal(10, 2)
+  unit             String          @default("Pcs") // Pcs, Pack, Box, Ream
+  location         String?
+
+  movements        StockMovement[]
+}
+
+model StockMovement {
+  id              Int           @id @default(autoincrement())
+  inventoryItemId Int
+  movementType    String        // IN, OUT, ADJUSTMENT
+  quantity        Int
+  referenceNo     String?       // "PO-2025-01" or "ISSUE-MATH-LAB"
+  recordedBy      String?
+  remarks         String?
+  date            DateTime      @default(now())
+
+  item            InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+}
+
+model Announcement {
+  id             Int            @id @default(autoincrement())
+  title          String
+  content        String         @db.Text
+  targetAudience TargetAudience @default(ALL)
+  classGradeId   Int?
+  priority       PriorityLevel  @default(NORMAL)
+  publishedAt    DateTime       @default(now())
+  expiresAt      DateTime?
+  createdBy      String         @default("Admin")
+
+  classGrade     ClassGrade?    @relation(fields: [classGradeId], references: [id], onDelete: SetNull)
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String   // "STUDENT_ADMISSION", "FEE_COLLECTION", "MARKS_UPDATED", "USER_LOGIN"
+  module    String   // "Students", "Fees", "Examinations", "Auth"
+  details   String?  @db.Text
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}

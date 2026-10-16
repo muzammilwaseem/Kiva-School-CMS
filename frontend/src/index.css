@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-teal: #0db29b;
+    --color-deep-teal: #05897a;
+    --color-warm-yellow: #f6c65b;
+    --color-accent-orange: #f2793d;
+    --color-violet: #8f46d9;
+    --color-text-primary: #082c4b;
+    --color-text-muted: #5f7576;
+    --color-text-inverse: #ffffff;
+    --color-dark-blue: #082c4b;
+    --color-teal2: #08b89e;
+    --color-yellow: #fac217;
+    --color-orange: #f68845;
+    --color-purple: #ab75b2;
+    --color-grey: #a4a4a5;
+    --color-panel-cream: #fef7e2;
+  }
+
+  body {
+    font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #082c4b;
+    background-color: #fbfbfa;
+  }
+
+  ::selection {
+    background-color: #0db29b;
+    color: #ffffff;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print Styles for ID Cards, Fee Challans, and Result Cards */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-page {
+    page-break-after: always;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
